@@ -1,0 +1,53 @@
+ROADMAP.md
+CONTRIBUTING.md
+
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+venv/
+.env/
+
+# Conda environments
+env/
+envs/
+*.conda
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+
+# Build / distribution
+build/
+dist/
+*.egg-info/
+
+# Data (optional - uncomment if needed)
+# data/
+# datasets/
+
+# Model files (optional - large files)
+# *.pt
+# *.pth
+# *.ckpt
+
+
+# Streamlit
+.streamlit/
+
+# Cache
+.cache/
