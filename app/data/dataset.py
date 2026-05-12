@@ -5,6 +5,8 @@ from typing import Any
 
 import pandas as pd
 
+from app.data.schema import infer_dataset_readiness
+
 
 AI4I_FEATURE_COLUMNS = [
     "Air temperature [K]",
@@ -23,6 +25,7 @@ def load_csv(path: str | Path) -> pd.DataFrame:
 
 def dataset_metadata(df: pd.DataFrame, path: str | Path | None = None) -> dict[str, Any]:
     failure_col = "Machine failure" if "Machine failure" in df.columns else None
+    readiness = infer_dataset_readiness(df).to_dict()
     return {
         "path": str(path) if path else "",
         "rows": int(len(df)),
@@ -30,6 +33,7 @@ def dataset_metadata(df: pd.DataFrame, path: str | Path | None = None) -> dict[s
         "numeric_columns": list(df.select_dtypes("number").columns),
         "failure_rate": float(df[failure_col].mean()) if failure_col else None,
         "failure_count": int(df[failure_col].sum()) if failure_col else None,
+        "readiness": readiness,
     }
 
 
@@ -50,5 +54,7 @@ def feature_columns(df: pd.DataFrame) -> list[str]:
     ai4i = [col for col in AI4I_FEATURE_COLUMNS if col in df.columns]
     if ai4i:
         return ai4i
+    readiness = infer_dataset_readiness(df)
+    if readiness.numeric_sensor_columns:
+        return readiness.numeric_sensor_columns[:8]
     return list(df.select_dtypes("number").columns[:8])
-

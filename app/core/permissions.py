@@ -16,7 +16,15 @@ class PermissionManager:
                 "chart_generator",
                 "report_generator",
             },
-            "viewer": {"statistical_summary", "manual_rag_search", "report_generator"},
+            "viewer": {
+                "dataset_loader",
+                "statistical_summary",
+                "anomaly_detector",
+                "fault_lookup",
+                "manual_rag_search",
+                "chart_generator",
+                "report_generator",
+            },
         }
     )
 
@@ -29,4 +37,3 @@ class PermissionManager:
 
 
 permission_manager = PermissionManager()
-

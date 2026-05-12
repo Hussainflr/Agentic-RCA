@@ -5,19 +5,35 @@ from pathlib import Path
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+from sklearn.ensemble import IsolationForest
+from sklearn.preprocessing import StandardScaler
 
 from app.data.dataset import feature_columns, load_csv
+from app.data.schema import DatasetReadiness, infer_dataset_readiness
+
+
+def readiness_panel(readiness: DatasetReadiness) -> None:
+    score = readiness.readiness_score
+    label = "Excellent" if score >= 0.8 else "Good" if score >= 0.6 else "Limited"
+    st.progress(score)
+    st.caption(f"Dataset readiness: **{label}** ({score:.2f})")
+    for note in readiness.notes:
+        st.markdown(f"- {note}")
 
 
 def dataset_dashboard(df: pd.DataFrame) -> None:
     st.subheader("Dashboard")
-    c1, c2, c3 = st.columns(3)
+    readiness = infer_dataset_readiness(df)
+    c1, c2, c3, c4 = st.columns(4)
     c1.metric("Rows", f"{len(df):,}")
     c2.metric("Columns", len(df.columns))
+    c3.metric("Numeric Sensors", len(readiness.numeric_sensor_columns))
     if "Machine failure" in df.columns:
-        c3.metric("Failure Rate", f"{df['Machine failure'].mean() * 100:.2f}%")
+        c4.metric("Failure Rate", f"{df['Machine failure'].mean() * 100:.2f}%")
     else:
-        c3.metric("Failure Rate", "N/A")
+        c4.metric("Failure Rate", "N/A")
+
+    readiness_panel(readiness)
 
     if "Machine failure" in df.columns:
         st.plotly_chart(px.histogram(df, x="Machine failure", title="Failure Distribution"), use_container_width=True)
@@ -28,6 +44,25 @@ def dataset_dashboard(df: pd.DataFrame) -> None:
             px.line(df.reset_index().head(500), x="index", y=cols[:5], title="Sensor Trends - First 500 Rows"),
             use_container_width=True,
         )
+        anomaly_overview(df, cols)
+
+
+def anomaly_overview(df: pd.DataFrame, cols: list[str]) -> None:
+    st.subheader("Anomaly Indicators")
+    clean = df[cols].dropna()
+    if clean.empty or len(clean) < 10:
+        st.info("Not enough valid numeric rows for anomaly overview.")
+        return
+    scaler = StandardScaler()
+    matrix = scaler.fit_transform(clean)
+    model = IsolationForest(n_estimators=100, contamination="auto", random_state=42)
+    labels = model.fit_predict(matrix)
+    scores = model.decision_function(matrix)
+    scored = df.loc[clean.index].copy()
+    scored["anomaly_flag"] = labels == -1
+    scored["anomaly_score"] = scores
+    st.metric("Potential Anomalous Records", int(scored["anomaly_flag"].sum()))
+    st.dataframe(scored[scored["anomaly_flag"]].head(20), use_container_width=True)
 
 
 def evidence_viewer(final_state: dict) -> None:
@@ -95,4 +130,3 @@ def load_dataframe_from_upload_or_path(upload, path: str | None) -> tuple[pd.Dat
     if path and Path(path).exists():
         return load_csv(path), path
     return None, None
-
