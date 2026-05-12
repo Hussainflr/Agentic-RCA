@@ -7,7 +7,9 @@ A production-style GenAI reference implementation for diagnosing industrial equi
 This repository demonstrates (Agentic Harness) a stateful, audited Root Cause Analysis (RCA) workflow built on:
 
 - LangGraph multi-agent control loops
+- LangChain Runnable chains for agent behavior
 - LangChain tools for data analytics, retrieval, and reporting
+- Pydantic structured outputs between RCA stages
 - Local-first LLM support with Ollama plus optional OpenAI/Anthropic providers
 - Structured evidence grounding, verification, and refinement
 - Safety, permissions, and prompt-injection filtering
@@ -33,6 +35,24 @@ This repository demonstrates (Agentic Harness) a stateful, audited Root Cause An
 ## Architecture
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for a full architecture overview and [ROADMAP.md](ROADMAP.md) for planned enhancements.
+
+### Agent Implementation
+
+LangGraph remains the stateful control loop. Each graph node now delegates to a LangChain `RunnableLambda` chain that validates its output through Pydantic models:
+
+```text
+LangGraph node
+→ LangChain Runnable chain
+→ deterministic RCA tools and optional LLM prompt
+→ Pydantic structured output
+→ next LangGraph node
+```
+
+Key files:
+
+- `app/chains/rca_chains.py`
+- `app/core/structured_outputs.py`
+- `app/agents/agent_nodes.py`
 
 ## Quick Start
 
@@ -101,4 +121,3 @@ Expected AI4I columns include:
 ## License
 
 No license file is included in this repository. Add one if you plan to distribute or publish this project.
-

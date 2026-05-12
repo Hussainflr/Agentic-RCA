@@ -46,11 +46,12 @@ def infer_dataset_readiness(df: pd.DataFrame) -> DatasetReadiness:
     categorical_columns = df.select_dtypes(exclude="number").columns.tolist()
     id_columns = [column for column in df.columns if _has_hint(column, ID_HINTS)]
     timestamp_columns = [column for column in df.columns if _has_hint(column, TIME_HINTS)]
-    fault_code_columns = [column for column in df.columns if column in FAULT_CODE_COLUMNS or column.lower() in {"fault_code", "fault_type"}]
+    fault_code_columns = [
+        column for column in df.columns if column in FAULT_CODE_COLUMNS or column.lower() in {"fault_code", "fault_type"}
+    ]
     failure_label_columns = [
         column for column in df.columns if _has_hint(column, FAILURE_HINTS) and column not in fault_code_columns
     ]
-
     excluded = set(id_columns + failure_label_columns + fault_code_columns)
     numeric_sensor_columns = [column for column in numeric_columns if column not in excluded]
 
@@ -65,7 +66,7 @@ def infer_dataset_readiness(df: pd.DataFrame) -> DatasetReadiness:
         score += 0.2
         notes.append(f"Detected failure label columns: {', '.join(failure_label_columns)}.")
     else:
-        notes.append("No failure label detected; RCA will rely on anomaly/manual evidence.")
+        notes.append("No failure label detected; RCA will rely on anomaly and manual evidence.")
     if fault_code_columns:
         score += 0.2
         notes.append(f"Detected fault-code columns: {', '.join(fault_code_columns)}.")
@@ -92,19 +93,4 @@ def infer_dataset_readiness(df: pd.DataFrame) -> DatasetReadiness:
         readiness_score=round(min(score, 1.0), 2),
         notes=notes,
     )
-
-
-def suggested_record_id(df: pd.DataFrame, readiness: DatasetReadiness) -> int:
-    if "UDI" in df.columns and "Machine failure" in df.columns:
-        failed = df[df["Machine failure"] == 1]
-        if not failed.empty:
-            return int(failed["UDI"].iloc[0])
-    for column in readiness.failure_label_columns + readiness.fault_code_columns:
-        if column in df.columns:
-            failed = df[pd.to_numeric(df[column], errors="coerce").fillna(0) == 1]
-            if not failed.empty:
-                if "UDI" in df.columns:
-                    return int(failed["UDI"].iloc[0])
-                return int(failed.index[0])
-    return 0
 
