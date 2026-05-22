@@ -10,8 +10,50 @@ from app.data.dataset import feature_columns, load_csv
 from app.data.schema import infer_dataset_readiness
 
 
+def inject_app_css() -> None:
+    st.markdown(
+        """
+        <style>
+        .block-container { padding-top: 1.4rem; padding-bottom: 2rem; }
+        div[data-testid="stMetric"] {
+            background: #ffffff;
+            border: 1px solid #e6e8ef;
+            border-radius: 8px;
+            padding: 0.75rem 0.85rem;
+        }
+        div[data-testid="stAlert"] { border-radius: 8px; }
+        .rca-step {
+            border: 1px solid #e6e8ef;
+            border-radius: 8px;
+            padding: 0.7rem 0.85rem;
+            background: #fbfcff;
+            margin-bottom: 0.55rem;
+        }
+        .rca-muted { color: #667085; font-size: 0.92rem; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def workflow_steps(active_step: str = "") -> None:
+    steps = [
+        ("Dataset", "Load and validate the CSV."),
+        ("Record", "Choose a failed or suspicious machine record."),
+        ("Evidence", "Summarize sensors, faults, and manual/SOP evidence."),
+        ("RCA", "Run LangGraph + LangChain chains."),
+        ("Report", "Review, evaluate, and export."),
+    ]
+    for name, description in steps:
+        marker = "●" if name == active_step else "○"
+        st.markdown(
+            f"<div class='rca-step'><b>{marker} {name}</b><br><span class='rca-muted'>{description}</span></div>",
+            unsafe_allow_html=True,
+        )
+
+
 def dataset_dashboard(df: pd.DataFrame) -> None:
-    st.subheader("Dashboard")
+    st.subheader("Dataset Dashboard")
     readiness = infer_dataset_readiness(df)
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Rows", f"{len(df):,}")
@@ -22,7 +64,7 @@ def dataset_dashboard(df: pd.DataFrame) -> None:
     else:
         c4.metric("Failure Rate", "N/A")
 
-    label = "Excellent" if readiness.readiness_score >= 0.8 else "Good" if readiness.readiness_score >= 0.6 else "Limited"
+    label = readiness_label(readiness.readiness_score)
     st.progress(readiness.readiness_score)
     st.caption(f"Dataset readiness: **{label}** ({readiness.readiness_score:.2f})")
     with st.expander("Dataset readiness details"):
@@ -31,14 +73,48 @@ def dataset_dashboard(df: pd.DataFrame) -> None:
         st.json(readiness.to_dict())
 
     if "Machine failure" in df.columns:
-        st.plotly_chart(px.histogram(df, x="Machine failure", title="Failure Distribution"), use_container_width=True)
+        fig = px.histogram(df, x="Machine failure", title="Failure Distribution")
+        fig.update_layout(height=320, margin=dict(l=20, r=20, t=55, b=20))
+        st.plotly_chart(fig, use_container_width=True)
 
     cols = feature_columns(df)
     if cols:
-        st.plotly_chart(
-            px.line(df.reset_index().head(500), x="index", y=cols[:5], title="Sensor Trends - First 500 Rows"),
-            use_container_width=True,
-        )
+        fig = px.line(df.reset_index().head(500), x="index", y=cols[:5], title="Sensor Trends - First 500 Rows")
+        fig.update_layout(height=360, margin=dict(l=20, r=20, t=55, b=20), legend_title_text="Sensor")
+        st.plotly_chart(fig, use_container_width=True)
+
+
+def readiness_label(score: float) -> str:
+    if score >= 0.8:
+        return "Excellent"
+    if score >= 0.6:
+        return "Good"
+    return "Limited"
+
+
+def dataset_setup_panel(df: pd.DataFrame) -> None:
+    readiness = infer_dataset_readiness(df)
+    st.subheader("Dataset Setup")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Rows", f"{len(df):,}")
+    c2.metric("Columns", len(df.columns))
+    c3.metric("Numeric Sensors", len(readiness.numeric_sensor_columns))
+    c4.metric("Readiness", readiness_label(readiness.readiness_score))
+    st.progress(readiness.readiness_score)
+    for note in readiness.notes:
+        st.markdown(f"- {note}")
+    with st.expander("Detected schema"):
+        st.json(readiness.to_dict())
+    st.dataframe(df.head(30), use_container_width=True)
+
+
+def selected_record_panel(record: dict) -> None:
+    st.markdown("**Selected Record**")
+    if not record:
+        st.info("No record selected.")
+        return
+    compact = {str(k): str(v) for k, v in record.items()}
+    st.json(compact)
 
 
 def evidence_viewer(final_state: dict) -> None:
@@ -73,9 +149,11 @@ def evaluation_dashboard(final_state: dict) -> None:
 def report_viewer(final_state: dict, report_path: str | None = None) -> None:
     st.subheader("RCA Report")
     report = final_state.get("report", {})
-    st.markdown(f"### {report.get('most_likely_root_cause', 'No report yet')}")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Most Likely Root Cause", report.get("most_likely_root_cause", "Unknown"))
+    c2.metric("Confidence", f"{float(report.get('confidence_score', 0)):.2f}")
+    c3.metric("Risk Level", report.get("risk_level", "unknown"))
     st.progress(float(report.get("confidence_score", 0)))
-    st.write("Risk level:", report.get("risk_level", "unknown"))
     for section, key in [
         ("Dataset Evidence", "evidence_from_dataset"),
         ("Manual/SOP Evidence", "evidence_from_manuals"),

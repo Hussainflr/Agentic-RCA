@@ -94,3 +94,26 @@ def infer_dataset_readiness(df: pd.DataFrame) -> DatasetReadiness:
         notes=notes,
     )
 
+
+def suggested_record_id(df: pd.DataFrame, readiness: DatasetReadiness) -> int:
+    if "UDI" in df.columns and "Machine failure" in df.columns:
+        failed = df[df["Machine failure"] == 1]
+        if not failed.empty:
+            return int(failed["UDI"].iloc[0])
+    for column in readiness.failure_label_columns + readiness.fault_code_columns:
+        if column in df.columns:
+            failed = df[pd.to_numeric(df[column], errors="coerce").fillna(0) == 1]
+            if not failed.empty:
+                if "UDI" in df.columns:
+                    return int(failed["UDI"].iloc[0])
+                return int(failed.index[0])
+    return 0
+
+
+def selected_record_preview(df: pd.DataFrame, record_id: int) -> dict[str, Any]:
+    if df.empty:
+        return {}
+    if "UDI" in df.columns and record_id in set(df["UDI"].astype(int).tolist()):
+        return df.loc[df["UDI"].astype(int) == int(record_id)].iloc[0].to_dict()
+    safe_idx = max(0, min(int(record_id), len(df) - 1))
+    return df.iloc[safe_idx].to_dict()
